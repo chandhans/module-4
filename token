@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+
+contract redeemToken is ERC20, Ownable, ERC20Burnable, Pausable {
+    event LogMessage(string message);
+
+    struct Voucher {
+        string voucherName;
+        uint256 tokenCost;
+    }
+
+    mapping(string => Voucher) public vouchers;
+    mapping(address => string) public redeemed;
+
+    constructor() ERC20("DEGEN", "DGN") Ownable(msg.sender) {
+        _initializeVouchers();
+    }
+
+    modifier hasSufficientFunds(uint256 tokens) {
+        require(balanceOf(msg.sender) >= tokens, "INSUFFICIENT FUNDS!!");
+        _;
+    }
+
+    function _initializeVouchers() internal {
+        _addVoucher("Discount50", 120);
+        _addVoucher("FreeBurger", 200);
+        _addVoucher("ComboDeal", 150);
+        _addVoucher("FreeDrink", 100);
+    }
+
+    function _addVoucher(string memory voucherName, uint256 tokenCost) internal {
+        vouchers[voucherName] = Voucher(voucherName, tokenCost);
+    }
+
+    function mint(address grantee, uint256 tokens) external onlyOwner {
+        _mint(grantee, tokens);
+    }
+
+    function transferTokens(address recipient, uint256 tokens) external hasSufficientFunds(tokens) {
+        _transfer(msg.sender, recipient, tokens);
+    }
+
+    function redeemVoucher(string memory voucherName) external payable hasSufficientFunds(vouchers[voucherName].tokenCost) {
+        Voucher storage voucher = vouchers[voucherName];
+        redeemed[msg.sender] = voucherName;
+        _burn(msg.sender, voucher.tokenCost);
+        emit LogMessage("Redeemed voucher");
+    }
+
+    // Different function: Modify voucher name
+    function modifyVoucherName(string memory currentName, string memory newName) external onlyOwner {
+        require(bytes(vouchers[currentName].voucherName).length > 0, "Voucher does not exist");
+        vouchers[newName] = vouchers[currentName];
+        delete vouchers[currentName];
+    }
+
+    // Different function: Emergency pause contract
+    function emergencyPauseContract() external onlyOwner {
+        _pause();
+    }
+}
